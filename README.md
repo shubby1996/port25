@@ -1,5 +1,9 @@
 # Port 25
 
+<p align="center">
+  <img src="docs/consequence-routing-diagram.svg" alt="Port 25 email consequence-routing workflow" width="100%">
+</p>
+
 Two AI agents at different organisations negotiate a supply contract by real
 email — not an API, not a shared agent protocol. Email is the one
 interoperability layer every company already has: its own authentication,

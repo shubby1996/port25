@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="790" viewBox="0 0 1400 790" role="img" aria-labelledby="title desc">
+  <title id="title">Email consequence routing workflow</title>
+  <desc id="desc">Inbound email passes through a consequence classifier and is routed to routine, complex, or human escalation before an outbound reply is sent.</desc>
+
+  <defs>
+    <style>
+      .canvas { fill: #fbfbfa; }
+      .teal-box { fill: #e2f3ef; stroke: #4b9d8a; }
+      .neutral-box { fill: #f2f0eb; stroke: #8f8b82; }
+      .amber-box { fill: #fff1d8; stroke: #c88424; }
+      .box { stroke-width: 1.4; }
+      .flow { fill: none; stroke: #8d8b86; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .heading { font: 600 25px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #173f38; text-anchor: middle; }
+      .neutral-heading { fill: #45443f; }
+      .amber-heading { fill: #71450b; }
+      .subheading { font: 400 20px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #156251; text-anchor: middle; }
+      .neutral-subheading { fill: #5e5b54; }
+      .amber-subheading { fill: #8b5108; }
+      .caption { font: 400 19px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #595751; text-anchor: middle; }
+      .legend { font: 500 18px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #595751; text-anchor: middle; }
+    </style>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M1 1l9 5-9 5" fill="none" stroke="#8d8b86" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="canvas" width="1400" height="790"/>
+
+  <!-- Inbound email -->
+  <rect class="box teal-box" x="525" y="38" width="350" height="96" rx="15"/>
+  <text class="heading" x="700" y="80">Inbound email</text>
+  <text class="subheading" x="700" y="112">counterparty replies</text>
+
+  <path class="flow" d="M700 142v48" marker-end="url(#arrow)"/>
+
+  <!-- Classifier -->
+  <rect class="box neutral-box" x="472" y="194" width="456" height="96" rx="15"/>
+  <text class="heading neutral-heading" x="700" y="237">Consequence classifier</text>
+  <text class="subheading neutral-subheading" x="700" y="269">cheap model tags risk</text>
+
+  <!-- Split routing -->
+  <path class="flow" d="M700 298v41M700 339H350v39" marker-end="url(#arrow)"/>
+  <path class="flow" d="M700 339v39" marker-end="url(#arrow)"/>
+  <path class="flow" d="M700 339h350v39" marker-end="url(#arrow)"/>
+
+  <!-- Tier 1 -->
+  <rect class="box teal-box" x="194" y="384" width="312" height="108" rx="15"/>
+  <text class="heading" x="350" y="428">Tier 1 · routine</text>
+  <text class="subheading" x="350" y="464">auto-send</text>
+
+  <!-- Tier 2 -->
+  <rect class="box teal-box" x="544" y="384" width="312" height="108" rx="15"/>
+  <text class="heading" x="700" y="428">Tier 2 · complex</text>
+  <text class="subheading" x="700" y="464">OpenRouter routes up</text>
+
+  <!-- Tier 3 -->
+  <rect class="box amber-box" x="894" y="384" width="312" height="108" rx="15"/>
+  <text class="heading amber-heading" x="1050" y="428">Tier 3 · escalate</text>
+  <text class="subheading amber-subheading" x="1050" y="464">human approves</text>
+
+  <!-- Join routing -->
+  <path class="flow" d="M350 500v43h350v43" marker-end="url(#arrow)"/>
+  <path class="flow" d="M700 500v86" marker-end="url(#arrow)"/>
+  <path class="flow" d="M1050 500v43H700v43" marker-end="url(#arrow)"/>
+
+  <!-- Outbound email -->
+  <rect class="box teal-box" x="525" y="592" width="350" height="96" rx="15"/>
+  <text class="heading" x="700" y="634">Outbound email</text>
+  <text class="subheading" x="700" y="666">our reply sends</text>
+
+  <text class="caption" x="700" y="733">↻ their reply arrives as the next inbound</text>
+  <text class="legend" x="700" y="772">Teal: agent acts alone · Amber: human decides</text>
+</svg>
