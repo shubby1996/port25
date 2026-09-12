@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Port 25</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#131a22; --muted:#5b6470; --field:#eef1f4; --rail:#fff;
+  --edge:#c9d1d9; --ours:#1f4fd8; --theirs:#5b6470; --alert:#b4530a;
+  --sans:'Inter',system-ui,sans-serif;
+  --serif:'Newsreader',Georgia,serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--field);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:32px 24px 96px}
+
+header{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--edge)}
+h1{font-family:var(--mono);font-size:15px;font-weight:500;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--muted);font-weight:400}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:var(--muted);margin-right:6px;vertical-align:middle}
+.dot.live{background:var(--ours)}
+.dot.wait{background:var(--alert)}
+
+/* The gauge is the hero: both positions on one price axis, floor drawn across */
+.gauge{position:relative;margin:36px 0 8px;height:230px}
+.axis{position:absolute;inset:0;border-left:1px solid var(--edge);margin-left:84px}
+.tick{position:absolute;left:0;transform:translate(-88px,-50%);
+  font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tick::after{content:"";position:absolute;left:80px;top:50%;width:8px;
+  height:1px;background:var(--edge)}
+.marker{position:absolute;transform:translateY(-50%);transition:top .45s cubic-bezier(.2,.7,.3,1)}
+.marker .bar{height:2px;background:currentColor}
+.marker .lab{font-family:var(--mono);font-size:12px;margin-top:5px;white-space:nowrap}
+.marker.ours{color:var(--ours);left:100px;width:300px}
+.marker.theirs{color:var(--theirs);left:440px;width:300px}
+.marker.theirs .lab{text-align:right}
+.floor{position:absolute;left:84px;right:0;border-top:2px dashed var(--alert);
+  transition:top .35s ease}
+.floor .lab{position:absolute;right:0;top:-24px;font-family:var(--mono);
+  font-size:11px;color:var(--alert)}
+.breach .marker.theirs{color:var(--alert)}
+
+.control{display:flex;align-items:center;gap:14px;padding:16px 0;
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);margin-top:24px}
+.control label{font-size:13px;color:var(--muted);white-space:nowrap}
+.control input[type=range]{flex:1;accent-color:var(--alert)}
+.control output{font-family:var(--mono);font-size:14px;min-width:72px;text-align:right}
+
+.thread{margin-top:36px;display:flex;flex-direction:column;gap:20px}
+.letter{background:var(--rail);border:1px solid var(--edge);padding:18px 20px;
+  max-width:78%}
+.letter.out{align-self:flex-start;border-left:2px solid var(--ours)}
+.letter.in{align-self:flex-end;border-right:2px solid var(--theirs)}
+.letter p{font-family:var(--serif);font-size:16.5px;line-height:1.62;margin:0}
+.stamp{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--edge);
+  font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.tier{padding:1px 7px;border:1px solid currentColor}
+.tier.routine{color:var(--muted)}
+.tier.complex{color:var(--ours)}
+.tier.escalate{color:var(--alert)}
+.reason{font-family:var(--sans);font-size:13px;color:var(--ink);flex-basis:100%}
+
+.approval{position:sticky;bottom:0;margin-top:32px;background:var(--rail);
+  border:1px solid var(--alert);border-top-width:3px;padding:20px}
+.approval h2{font-size:15px;font-weight:500;margin:0 0 4px}
+.approval .why{font-size:13px;color:var(--alert);margin:0 0 12px}
+.approval textarea{width:100%;min-height:104px;font-family:var(--serif);
+  font-size:16px;line-height:1.6;padding:12px;border:1px solid var(--edge);
+  background:var(--field);resize:vertical;color:inherit}
+.actions{display:flex;gap:10px;margin-top:12px}
+button{font-family:var(--sans);font-size:14px;padding:9px 18px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--ink);color:var(--rail)}
+button.ghost{background:transparent;color:var(--ink)}
+button:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
+.empty{margin-top:48px;text-align:center;color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>port 25 <span id="subject">— no thread open</span></h1>
+    <div class="meta"><span class="dot" id="dot"></span><span id="status">idle</span> · <span id="transport">—</span></div>
+  </header>
+
+  <section class="gauge" id="gauge" hidden>
+    <div class="axis"></div>
+    <div id="ticks"></div>
+    <div class="floor" id="floor"><span class="lab">walk-away floor</span></div>
+    <div class="marker ours" id="mOurs"><div class="bar"></div><div class="lab">our offer</div></div>
+    <div class="marker theirs" id="mTheirs"><div class="bar"></div><div class="lab">their ask</div></div>
+  </section>
+
+  <div class="control" id="control" hidden>
+    <label for="floorRange">Walk-away floor</label>
+    <input type="range" id="floorRange" min="10" max="18" step="0.1" value="12.5">
+    <output id="floorOut">12.50 EUR</output>
+  </div>
+
+  <div class="empty" id="empty">
+    <p>No negotiation running.</p>
+    <button id="startBtn">Open a thread</button>
+  </div>
+
+  <div class="thread" id="thread"></div>
+
+  <div class="approval" id="approval" hidden>
+    <h2>Your agent stopped and is waiting</h2>
+    <p class="why" id="approvalWhy"></p>
+    <textarea id="draft" aria-label="Draft reply"></textarea>
+    <div class="actions">
+      <button id="approveBtn">Send this reply</button>
+      <button class="ghost" id="rejectBtn">Walk away</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = location.port === '8000' ? '' : 'http://localhost:8000';
+const $ = id => document.getElementById(id);
+let state = null, dirty = false;
+
+const PRICE_MIN = 9, PRICE_MAX = 18;
+const pct = v => ((PRICE_MAX - v) / (PRICE_MAX - PRICE_MIN)) * 100;
+
+function renderTicks() {
+  $('ticks').innerHTML = [10, 12, 14, 16, 18]
+    .map(v => `<div class="tick" style="top:${pct(v)}%">${v.toFixed(2)}</div>`).join('');
+}
+
+function render() {
+  if (!state) return;
+  $('subject').textContent = '— ' + state.subject;
+  $('status').textContent = state.status;
+  $('transport').textContent = state.our_email || '—';
+  $('dot').className = 'dot ' + (state.status === 'awaiting' ? 'wait'
+    : state.status === 'closed' ? '' : 'live');
+
+  $('empty').hidden = true;
+  $('gauge').hidden = false;
+  $('control').hidden = false;
+
+  const ours = state.our_position.unit_price_eur;
+  const theirs = state.their_position.unit_price_eur;
+  const floor = state.mandate.floor_price_eur;
+
+  $('floor').style.top = pct(floor) + '%';
+  if (ours != null) {
+    $('mOurs').style.top = pct(ours) + '%';
+    $('mOurs').querySelector('.lab').textContent = `we offer ${ours.toFixed(2)}`;
+  }
+  if (theirs != null) {
+    $('mTheirs').style.top = pct(theirs) + '%';
+    $('mTheirs').querySelector('.lab').textContent = `they ask ${theirs.toFixed(2)}`;
+  }
+  $('gauge').classList.toggle('breach', theirs != null && theirs > floor);
+
+  if (!dirty) {
+    $('floorRange').value = floor;
+    $('floorOut').textContent = floor.toFixed(2) + ' EUR';
+  }
+
+  $('thread').innerHTML = state.turns.map(t => {
+    const tier = t.tier ? `<span class="tier ${t.tier}">${t.tier}</span>` : '';
+    const model = t.model_used ? `<span>${t.model_used}</span>` : '';
+    const human = t.approved_by_human ? '<span>approved by a person</span>' : '';
+    const reason = t.reason ? `<span class="reason">${esc(t.reason)}</span>` : '';
+    return `<article class="letter ${t.direction}">
+      <p>${esc(t.body).replace(/\n+/g, '</p><p>')}</p>
+      <div class="stamp">${tier}${model}${human}${reason}</div>
+    </article>`;
+  }).join('');
+
+  const waiting = state.status === 'awaiting';
+  $('approval').hidden = !waiting;
+  if (waiting) {
+    const last = [...state.turns].reverse().find(t => t.direction === 'in');
+    $('approvalWhy').textContent = last ? last.reason : '';
+    if (document.activeElement !== $('draft')) $('draft').value = state.pending_draft;
+  }
+}
+
+const esc = s => (s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function api(path, opts) {
+  const r = await fetch(API + path, {
+    headers: {'Content-Type': 'application/json'}, ...opts
+  });
+  if (!r.ok) return null;
+  state = await r.json();
+  render();
+  return state;
+}
+
+$('startBtn').onclick = () => api('/negotiation', {method: 'POST'});
+$('approveBtn').onclick = () => {
+  api('/negotiation/approve', {
+    method: 'POST', body: JSON.stringify({edited_body: $('draft').value})
+  });
+};
+$('rejectBtn').onclick = () => api('/negotiation/reject', {method: 'POST'});
+
+let debounce;
+$('floorRange').oninput = e => {
+  dirty = true;
+  const v = parseFloat(e.target.value);
+  $('floorOut').textContent = v.toFixed(2) + ' EUR';
+  $('floor').style.top = pct(v) + '%';
+  clearTimeout(debounce);
+  debounce = setTimeout(async () => {
+    await api('/negotiation/mandate', {
+      method: 'PATCH', body: JSON.stringify({floor_price_eur: v})
+    });
+    dirty = false;
+  }, 250);
+};
+
+renderTicks();
+api('/negotiation').catch(() => {});
+setInterval(() => { if (!dirty) api('/negotiation').catch(() => {}); }, 2000);
+</script>
+</body>
+</html>

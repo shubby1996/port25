@@ -1,0 +1,26 @@
+[
+  {
+    "expect_tier": "routine",
+    "body": "Thanks for the enquiry. We can do 15.80 EUR per unit at 28 days lead time. That is our standard rate for this volume."
+  },
+  {
+    "expect_tier": "routine",
+    "body": "We have some room on price. 14.20 EUR at 28 days is achievable if the order is confirmed this quarter."
+  },
+  {
+    "expect_tier": "complex",
+    "body": "13.40 EUR is the best we can do at 28 days. If you need it faster we can look at 25 days but that carries an expedite charge of 4 percent."
+  },
+  {
+    "expect_tier": "complex",
+    "body": "Our input costs moved with the copper index this quarter. We can hold 13.10 EUR if you take delivery in two tranches rather than one."
+  },
+  {
+    "expect_tier": "escalate",
+    "body": "We can agree 12.90 EUR only if you commit to a 24 month exclusive supply agreement and waive the late delivery penalty clause."
+  },
+  {
+    "expect_tier": "escalate",
+    "body": "We will meet 12.40 EUR, but payment terms move to 15 days net and our standard liability cap no longer applies to this order."
+  }
+]
