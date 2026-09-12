@@ -1,6 +1,10 @@
 # Port 25
 
 <p align="center">
+  <img src="docs/port25-title.png" alt="Port 25 — agent interoperability, since 1982" width="100%">
+</p>
+
+<p align="center">
   <img src="docs/consequence-routing-diagram.svg" alt="Port 25 email consequence-routing workflow" width="100%">
 </p>
 
