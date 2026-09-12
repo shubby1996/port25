@@ -17,8 +17,8 @@ from ..state import Tier
 # (model id, goes through OpenRouter, why — this string is shown on screen)
 ROUTING_TABLE: dict[Tier, tuple[str, bool, str]] = {
     Tier.ROUTINE: (
-        "gpt-4o-mini",
-        False,
+        "openai/gpt-4o-mini",
+        True,
         "Routine restatement of a known position — fast model is enough",
     ),
     Tier.COMPLEX: (

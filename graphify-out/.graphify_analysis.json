@@ -1,0 +1,270 @@
+{
+  "communities": {
+    "0": [
+      "any",
+      "backend_app_loop_reject",
+      "backend_app_main",
+      "backend_app_main_approvepayload",
+      "backend_app_main_create",
+      "backend_app_main_do_approve",
+      "backend_app_main_do_reject",
+      "backend_app_main_health",
+      "backend_app_main_mandatepatch",
+      "backend_app_main_patch_mandate",
+      "backend_app_main_poller",
+      "backend_app_main_py_basemodel",
+      "backend_app_main_rationale_1",
+      "backend_app_main_rationale_72",
+      "backend_app_main_rationale_96",
+      "backend_app_main_read",
+      "backend_app_main_shutdown",
+      "backend_app_main_startup",
+      "backend_app_state_negotiation",
+      "backend_app_state_negotiation_last_inbound",
+      "backend_app_state_negotiation_turn_count",
+      "backend_app_state_rationale_80",
+      "get",
+      "on_event",
+      "patch",
+      "post"
+    ],
+    "1": [
+      "backend_app_init",
+      "backend_app_loop_rationale_21",
+      "backend_app_loop_start",
+      "backend_app_state",
+      "backend_app_state_mandate",
+      "backend_app_state_negotiation_is_within_mandate",
+      "backend_app_state_new_negotiation",
+      "backend_app_state_position",
+      "backend_app_state_py_basemodel",
+      "backend_app_state_rationale_1",
+      "backend_app_state_rationale_118",
+      "backend_app_state_rationale_136",
+      "backend_app_state_rationale_39",
+      "backend_app_state_rationale_52",
+      "backend_app_state_status",
+      "backend_run_demo",
+      "backend_run_demo_main",
+      "backend_run_demo_rationale_1",
+      "backend_test_classifier",
+      "backend_test_classifier_rationale_1",
+      "enum",
+      "str"
+    ],
+    "2": [
+      "abc",
+      "backend_app_transport_base",
+      "backend_app_transport_base_get_transport",
+      "backend_app_transport_base_rationale_1",
+      "backend_app_transport_base_rationale_29",
+      "backend_app_transport_base_rationale_41",
+      "backend_app_transport_base_transport",
+      "backend_app_transport_base_transport_healthcheck",
+      "backend_app_transport_base_transport_send",
+      "backend_app_transport_init"
+    ],
+    "3": [
+      "backend_app_transport_base_inboundmessage",
+      "backend_app_transport_base_py_basemodel",
+      "backend_app_transport_mock",
+      "backend_app_transport_mock_mocktransport",
+      "backend_app_transport_mock_mocktransport_healthcheck",
+      "backend_app_transport_mock_mocktransport_init",
+      "backend_app_transport_mock_mocktransport_poll",
+      "backend_app_transport_mock_mocktransport_send",
+      "backend_app_transport_mock_mocktransport_sent",
+      "backend_app_transport_mock_rationale_1"
+    ],
+    "4": [
+      "backend_app_brain_drafting",
+      "backend_app_brain_drafting_draft_reply",
+      "backend_app_brain_drafting_rationale_1",
+      "backend_app_brain_drafting_rationale_21",
+      "backend_app_brain_llm",
+      "backend_app_brain_llm_complete",
+      "backend_app_brain_llm_rationale_1",
+      "backend_app_brain_llm_stub"
+    ],
+    "5": [
+      "backend_app_loop",
+      "backend_app_loop_handle_inbound",
+      "backend_app_loop_merge_position",
+      "backend_app_loop_rationale_1",
+      "backend_app_loop_rationale_38",
+      "backend_app_loop_send",
+      "backend_app_state_rationale_64",
+      "backend_app_state_turn"
+    ],
+    "6": [
+      "backend_app_transport_smtp_imap",
+      "backend_app_transport_smtp_imap_plain_text",
+      "backend_app_transport_smtp_imap_rationale_1",
+      "backend_app_transport_smtp_imap_smtpimaptransport",
+      "backend_app_transport_smtp_imap_smtpimaptransport_healthcheck",
+      "backend_app_transport_smtp_imap_smtpimaptransport_init",
+      "backend_app_transport_smtp_imap_smtpimaptransport_poll",
+      "backend_app_transport_smtp_imap_smtpimaptransport_send"
+    ],
+    "7": [
+      "backend_app_transport_ambiguous",
+      "backend_app_transport_ambiguous_ambiguoustransport",
+      "backend_app_transport_ambiguous_ambiguoustransport_healthcheck",
+      "backend_app_transport_ambiguous_ambiguoustransport_init",
+      "backend_app_transport_ambiguous_ambiguoustransport_poll",
+      "backend_app_transport_ambiguous_ambiguoustransport_send",
+      "backend_app_transport_ambiguous_rationale_1"
+    ],
+    "8": [
+      "backend_app_brain_classifier",
+      "backend_app_brain_classifier_classify",
+      "backend_app_brain_classifier_rationale_1",
+      "backend_app_state_rationale_24",
+      "backend_app_state_tier"
+    ],
+    "9": [
+      "backend_app_brain_router",
+      "backend_app_brain_router_pick_model",
+      "backend_app_brain_router_rationale_1",
+      "backend_app_loop_approve",
+      "backend_app_loop_rationale_74"
+    ],
+    "10": [
+      "backend_app_brain_context",
+      "backend_app_brain_context_fetch_market_context",
+      "backend_app_brain_context_rationale_1",
+      "backend_app_brain_init"
+    ],
+    "11": [
+      "backend_app_transport_base_rationale_38",
+      "backend_app_transport_base_transport_poll"
+    ]
+  },
+  "cohesion": {
+    "0": 0.12,
+    "1": 0.1341991341991342,
+    "2": 0.28888888888888886,
+    "3": 0.26666666666666666,
+    "4": 0.35714285714285715,
+    "5": 0.39285714285714285,
+    "6": 0.2857142857142857,
+    "7": 0.2857142857142857,
+    "8": 0.5,
+    "9": 0.4,
+    "10": 0.6666666666666666,
+    "11": 1.0
+  },
+  "gods": [
+    {
+      "id": "backend_app_state_negotiation",
+      "label": "Negotiation",
+      "degree": 23
+    },
+    {
+      "id": "backend_app_transport_base_transport",
+      "label": "Transport",
+      "degree": 19
+    },
+    {
+      "id": "backend_app_state_tier",
+      "label": "Tier",
+      "degree": 14
+    },
+    {
+      "id": "backend_app_transport_base_inboundmessage",
+      "label": "InboundMessage",
+      "degree": 14
+    },
+    {
+      "id": "backend_app_loop_handle_inbound",
+      "label": "handle_inbound()",
+      "degree": 13
+    },
+    {
+      "id": "backend_app_state_status",
+      "label": "Status",
+      "degree": 12
+    },
+    {
+      "id": "backend_app_transport_mock_mocktransport",
+      "label": "MockTransport",
+      "degree": 12
+    },
+    {
+      "id": "backend_app_state_new_negotiation",
+      "label": "new_negotiation()",
+      "degree": 10
+    },
+    {
+      "id": "backend_app_brain_classifier_classify",
+      "label": "classify()",
+      "degree": 9
+    },
+    {
+      "id": "backend_app_brain_drafting_draft_reply",
+      "label": "draft_reply()",
+      "degree": 9
+    }
+  ],
+  "surprises": [
+    {
+      "source": "classify()",
+      "target": "Negotiation",
+      "source_files": [
+        "backend/app/brain/classifier.py",
+        "backend/app/state.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "draft_reply()",
+      "target": "Negotiation",
+      "source_files": [
+        "backend/app/brain/drafting.py",
+        "backend/app/state.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "draft_reply()",
+      "target": "Tier",
+      "source_files": [
+        "backend/app/brain/drafting.py",
+        "backend/app/state.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "pick_model()",
+      "target": "Tier",
+      "source_files": [
+        "backend/app/brain/router.py",
+        "backend/app/state.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "start()",
+      "target": "Negotiation",
+      "source_files": [
+        "backend/app/loop.py",
+        "backend/app/state.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
