@@ -26,6 +26,143 @@ Copy `.env.example` to `.env` and fill in keys as you get them. Everything
 degrades gracefully: no `OPENAI_API_KEY` means stubbed model output, no
 `EXA_API_KEY` means no market context, and neither crashes the loop.
 
+### Automatic demo with two inboxes you own
+
+One server can run both sides. Set these values in the ignored repo-root `.env`:
+
+```dotenv
+PORT25_TRANSPORT=smtp
+PORT25_DEMO_PAIR=true
+OUR_EMAIL=first-account@gmail.com
+OUR_EMAIL_APP_PASSWORD=first-account-app-password
+COUNTERPARTY_EMAIL=second-account@gmail.com
+COUNTERPARTY_EMAIL_APP_PASSWORD=second-account-app-password
+```
+
+Use a separate app password for each inbox. Both accounts use the shared
+SMTP/IMAP settings by default. Optional `COUNTERPARTY_SMTP_HOST`,
+`COUNTERPARTY_SMTP_PORT`, `COUNTERPARTY_IMAP_HOST`, and `COUNTERPARTY_IMAP_PORT`
+override the second account's server settings when it uses another provider.
+Save credentials only in `.env`, never in `.env.example`.
+
+From the repository root, check both accounts without sending anything:
+
+```powershell
+& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --pair
+```
+
+Then start the server and open http://localhost:8000:
+
+```powershell
+cd backend
+& .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+```
+
+Click **Start two-inbox demo**. Both logins are checked before the first send.
+The buyer emails an opening offer of 10.00 EUR at 21 days, the supplier counters
+at 12.00 EUR, the buyer offers 11.00 EUR, and the supplier agrees. Every message
+travels through SMTP and is received through IMAP; no manual replies are needed.
+The console labels each side and shows the received negotiation. The supplier
+has an independent minimum price of 11.00 EUR, and the buyer's maximum starts at
+12.50 EUR.
+
+This mode uses **deterministic demo pricing rules**, labeled in the console.
+Set `PORT25_DEMO_AI=true` and supply `OPENROUTER_API_KEY` in the repo-root `.env`
+to enable OpenRouter wording for both agents and classification of supplier
+replies. Set `EXA_API_KEY` there for market context. Fixed offer terms and the
+six-message cap remain enforced in code. A drafting failure uses a labeled
+fallback; a classification failure pauses for review. With `PORT25_DEMO_AI=false`,
+the same two-inbox demo needs no model keys. With `PORT25_DEMO_PAIR=false`, the
+regular buyer agent is used.
+
+For the integrated dashboard, keep the backend running and start another terminal:
+
+```powershell
+cd web/next
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. It shows the live thread, both inboxes, email activity,
+model labels, and Exa context. **New negotiation** restarts after closure, and
+**Stop both agents** is available during any active run. See [console setup](web/next/README.md).
+
+For the human-supervision beat, lower **Maximum unit price** to 11.00 EUR before
+the supplier's first quote arrives. The buyer pauses when it receives 12.00 EUR;
+approve its 11.00 EUR counteroffer to continue. **Stop demo** stops both sides.
+Both sides also stop on agreement or after six messages. A failed send stops
+the demo without automatically retrying, since the server may have accepted it.
+State is in memory; after a server restart, start a new thread. Mail already
+sent stays in the two inboxes. Only one active demo runs per server process;
+run one worker and use one runner (console or CLI) at a time for these inboxes.
+
+For an unattended check without the console, run from the repository root:
+
+```powershell
+& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --pair --send --timeout 300
+```
+
+This sends up to six demo emails across the two accounts. `PASS` means the buyer
+received the supplier's agreement. Exit code `3` means the run stopped without
+agreement or needed human approval; start a console demo for interactive approval.
+
+### Verify one inbox with a manual reply (Windows / PowerShell)
+
+Create a repo-root `.env` from `.env.example` if it does not exist. Set
+`OUR_EMAIL`, `OUR_EMAIL_APP_PASSWORD`, and `COUNTERPARTY_EMAIL` locally.
+Use a second inbox you control for `COUNTERPARTY_EMAIL`; reply from that inbox
+manually for this first transport check. Only our inbox needs credentials here.
+Set `PORT25_DEMO_PAIR=false` to use the console with a manual counterparty.
+For Gmail, follow Google's [app password setup](https://support.google.com/accounts/answer/185833)
+(requires 2-Step Verification; availability depends on the account).
+
+From the repository root:
+
+```powershell
+# Checks both SMTP login and IMAP INBOX access. Sends no email.
+& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py
+
+# Sends one test email to COUNTERPARTY_EMAIL and waits up to 180 seconds.
+& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --send
+```
+
+The second command prints the unique subject to look for. Reply from the second
+inbox, keeping that subject, with `We can offer 12.00 EUR per unit at 21 days lead time.`
+`PASS` means a matching, non-empty reply arrived through IMAP. Exit codes:
+`0` success, `1` configuration/connection error, `2` reply timeout, `130` cancelled.
+Use `--to ADDRESS` to send to a different test inbox or `--timeout 300` to wait longer.
+The timeout controls the reply-wait loop; an in-flight network call can take longer
+(socket timeout: 15 seconds). The command always tests SMTP, even while the app is
+configured to use mock. It does not run the classifier or generate a reply.
+
+After the round trip passes, set `PORT25_TRANSPORT=smtp` in `.env`, then:
+
+```powershell
+cd backend
+& .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+# In another PowerShell terminal:
+Invoke-RestMethod http://localhost:8000/health
+```
+
+Check for `transport: smtp` and `ok: true`, then open http://localhost:8000 and
+start a negotiation. It uses the configured inboxes and adds a unique subject
+marker. Only replies from the counterparty with that subject enter the agent.
+Polling preserves read/unread flags and accepts replies even if you opened them
+in Gmail first. Duplicate tracking and queued replies last for the process lifetime;
+restart the demo with a new negotiation after restarting the server. Model output
+remains stubbed until the brain's API credentials are configured.
+
+Local regression checks (no mailbox credentials needed):
+
+```powershell
+cd backend
+& .\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-tmp
+& .\.venv\Scripts\python.exe run_demo.py
+```
+
+Install `pytest` into the venv if needed. `--basetemp` keeps test files inside
+the workspace on Windows.
+
 ---
 
 ## How it works

@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import json
 
+from pydantic import ValidationError
+
 from ..state import Negotiation, Position, Tier
+from .context import fetch_market_context
 from .llm import complete
 
-CLASSIFIER_MODEL = "gpt-4o-mini"
+CLASSIFIER_MODEL = "openai/gpt-4o-mini"
 
 SYSTEM = """You triage inbound negotiation emails for a buyer's autonomous agent.
 
@@ -31,8 +34,11 @@ tier is one of:
   complex  — they introduced a new argument, condition, or trade-off that needs
              a considered reply.
   escalate — they asked for something structurally new: a contract change, an
-             exclusivity or penalty clause, a legal term, or a price the buyer
-             cannot accept.
+             exclusivity or penalty clause, a change to payment terms or
+             liability/legal terms, or a price the buyer cannot accept. This
+             applies even if they also moved price or lead time in the same
+             email — a legal or structural change escalates regardless of
+             what else is in the message.
 
 reason: one short plain sentence a busy person can read at a glance.
 extracted: any price in EUR per unit and any lead time in days they named,
@@ -42,23 +48,30 @@ extracted: any price in EUR per unit and any lead time in days they named,
 
 def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Position]:
     prompt = (
-        f"Our mandate floor is {negotiation.mandate.floor_price_eur} EUR per unit "
+        f"Our maximum purchase price is {negotiation.mandate.floor_price_eur} EUR per unit "
         f"and max {negotiation.mandate.max_lead_time_days} days lead time.\n"
         f"Our current offer: {negotiation.our_position.model_dump()}\n\n"
         f"Their email:\n{inbound_body}"
     )
-    raw = complete(prompt, model=CLASSIFIER_MODEL, system=SYSTEM, json_mode=True)
+    raw = complete(
+        prompt, model=CLASSIFIER_MODEL, system=SYSTEM, json_mode=True, via_openrouter=True
+    )
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
         return Tier.ESCALATE, "Classifier returned unparseable output", Position()
 
+    if not isinstance(data, dict) or not isinstance(data.get("extracted") or {}, dict):
+        return Tier.ESCALATE, "Classifier returned an invalid result; review the reply", Position()
     extracted = data.get("extracted") or {}
-    position = Position(
-        unit_price_eur=extracted.get("unit_price_eur"),
-        lead_time_days=extracted.get("lead_time_days"),
-    )
+    try:
+        position = Position(
+            unit_price_eur=extracted.get("unit_price_eur"),
+            lead_time_days=extracted.get("lead_time_days"),
+        )
+    except ValidationError:
+        return Tier.ESCALATE, "Classifier could not read the offer terms; review the reply", Position()
 
     try:
         tier = Tier(data.get("tier", "escalate"))
@@ -72,6 +85,19 @@ def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Po
     # it can raise the tier to ESCALATE, never lower it.
     if not negotiation.is_within_mandate(position):
         tier = Tier.ESCALATE
-        reason = f"{reason} — and it breaches the mandate floor"
+        reason = f"{reason} — and it exceeds your price or lead-time limit"
+
+    # Good version of Exa grounding: refresh market evidence exactly when the
+    # stakes rise, not on every turn. A failed/empty fetch never clobbers
+    # context we already have (fetch_market_context swallows its own errors
+    # and returns "").
+    if tier is Tier.COMPLEX:
+        fresh_context = fetch_market_context(
+            f"{negotiation.subject} — market pricing benchmark for a unit price "
+            f"near {position.unit_price_eur} EUR" if position.unit_price_eur
+            else f"{negotiation.subject} — market pricing benchmark"
+        )
+        if fresh_context:
+            negotiation.market_context = fresh_context
 
     return tier, reason, position

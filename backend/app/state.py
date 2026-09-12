@@ -120,9 +120,7 @@ class Negotiation(BaseModel):
         Person B's classifier proposes a tier; this function overrides it. A
         model may not talk itself into exceeding the mandate.
         """
-        if position.unit_price_eur is None:
-            return True
-        if position.unit_price_eur > self.mandate.floor_price_eur:
+        if position.unit_price_eur is not None and position.unit_price_eur > self.mandate.floor_price_eur:
             return False
         if (
             position.lead_time_days is not None

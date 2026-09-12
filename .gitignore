@@ -1,7 +1,15 @@
 .env
+.env.local
+.env.*.local
+*.tsbuildinfo
+test-results/
+playwright-report/
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
+.pytest-tmp*/
+.runtime/
 venv/
 node_modules/
 .next/

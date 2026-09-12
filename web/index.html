@@ -82,6 +82,8 @@ button{font-family:var(--sans);font-size:14px;padding:9px 18px;cursor:pointer;
   border:1px solid var(--ink);background:var(--ink);color:var(--rail)}
 button.ghost{background:transparent;color:var(--ink)}
 button:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
+button:disabled{opacity:.5;cursor:wait}
+.error{color:var(--alert);border:1px solid var(--alert);padding:12px}
 .empty{margin-top:48px;text-align:center;color:var(--muted)}
 [hidden]{display:none!important}
 </style>
@@ -92,23 +94,30 @@ button:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
     <h1>port 25 <span id="subject">— no thread open</span></h1>
     <div class="meta"><span class="dot" id="dot"></span><span id="status">idle</span> · <span id="transport">—</span></div>
   </header>
+  <p class="meta" id="modeInfo"></p>
+  <p class="meta" id="accounts" hidden></p>
+  <p class="error" id="error" role="alert" hidden></p>
+  <div class="actions" id="sessionActions" hidden>
+    <button class="ghost" id="stopBtn">Stop demo</button>
+  </div>
+  <p id="outcome" role="status" hidden></p>
 
   <section class="gauge" id="gauge" hidden>
     <div class="axis"></div>
     <div id="ticks"></div>
-    <div class="floor" id="floor"><span class="lab">walk-away floor</span></div>
+    <div class="floor" id="floor"><span class="lab">maximum unit price</span></div>
     <div class="marker ours" id="mOurs"><div class="bar"></div><div class="lab">our offer</div></div>
     <div class="marker theirs" id="mTheirs"><div class="bar"></div><div class="lab">their ask</div></div>
   </section>
 
   <div class="control" id="control" hidden>
-    <label for="floorRange">Walk-away floor</label>
+    <label for="floorRange">Maximum unit price</label>
     <input type="range" id="floorRange" min="10" max="18" step="0.1" value="12.5">
     <output id="floorOut">12.50 EUR</output>
   </div>
 
   <div class="empty" id="empty">
-    <p>No negotiation running.</p>
+    <p id="emptyText">No negotiation running.</p>
     <button id="startBtn">Open a thread</button>
   </div>
 
@@ -146,7 +155,14 @@ function render() {
   $('dot').className = 'dot ' + (state.status === 'awaiting' ? 'wait'
     : state.status === 'closed' ? '' : 'live');
 
-  $('empty').hidden = true;
+  $('empty').hidden = state.status !== 'closed';
+  $('emptyText').textContent = 'This negotiation has finished.';
+  $('startBtn').textContent = 'Start another negotiation';
+  $('sessionActions').hidden = state.status === 'closed';
+  $('accounts').hidden = false;
+  $('accounts').textContent = `Buyer: ${state.our_email} | Supplier: ${state.counterparty_email}`;
+  $('outcome').hidden = state.status !== 'closed';
+  $('outcome').textContent = state.our_position.note || 'Negotiation closed.';
   $('gauge').hidden = false;
   $('control').hidden = false;
 
@@ -172,12 +188,13 @@ function render() {
 
   $('thread').innerHTML = state.turns.map(t => {
     const tier = t.tier ? `<span class="tier ${t.tier}">${t.tier}</span>` : '';
-    const model = t.model_used ? `<span>${t.model_used}</span>` : '';
+    const model = t.model_used ? `<span>${esc(t.model_used)}</span>` : '';
+    const sender = `<span>${t.direction === 'out' ? 'Buyer → Supplier' : 'Supplier → Buyer'}</span>`;
     const human = t.approved_by_human ? '<span>approved by a person</span>' : '';
     const reason = t.reason ? `<span class="reason">${esc(t.reason)}</span>` : '';
     return `<article class="letter ${t.direction}">
       <p>${esc(t.body).replace(/\n+/g, '</p><p>')}</p>
-      <div class="stamp">${tier}${model}${human}${reason}</div>
+      <div class="stamp">${sender}${tier}${model}${human}${reason}</div>
     </article>`;
   }).join('');
 
@@ -193,22 +210,36 @@ function render() {
 const esc = s => (s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 async function api(path, opts) {
-  const r = await fetch(API + path, {
-    headers: {'Content-Type': 'application/json'}, ...opts
-  });
-  if (!r.ok) return null;
-  state = await r.json();
-  render();
-  return state;
+  try {
+    const r = await fetch(API + path, {
+      headers: {'Content-Type': 'application/json'}, ...opts
+    });
+    if (r.status === 404 && !opts) return null;
+    const data = await r.json();
+    if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Request failed. Check the configuration.');
+    if (opts) $('error').hidden = true;
+    state = data;
+    render();
+    return state;
+  } catch (error) {
+    $('error').textContent = error.message;
+    $('error').hidden = false;
+    return null;
+  }
 }
 
-$('startBtn').onclick = () => api('/negotiation', {method: 'POST'});
+$('startBtn').onclick = async () => {
+  $('startBtn').disabled = true;
+  try { await api('/negotiation', {method: 'POST'}); }
+  finally { $('startBtn').disabled = false; }
+};
 $('approveBtn').onclick = () => {
   api('/negotiation/approve', {
     method: 'POST', body: JSON.stringify({edited_body: $('draft').value})
   });
 };
 $('rejectBtn').onclick = () => api('/negotiation/reject', {method: 'POST'});
+$('stopBtn').onclick = () => api('/negotiation/reject', {method: 'POST'});
 
 let debounce;
 $('floorRange').oninput = e => {
@@ -226,6 +257,21 @@ $('floorRange').oninput = e => {
 };
 
 renderTicks();
+fetch(API + '/health').then(r => r.json()).then(health => {
+  const paired = health.mode === 'demo_pair';
+  $('modeInfo').textContent = paired
+    ? 'Two inboxes · automatic buyer and supplier · demo pricing rules'
+    : 'Buyer agent · counterparty replies through the selected transport';
+  if (!state && paired) $('startBtn').textContent = 'Start two-inbox demo';
+  if (!health.ok) {
+    $('error').textContent = health.detail || Object.entries(health.accounts || {})
+      .filter(([, account]) => !account.ok).map(([role, account]) => `${role}: ${account.detail}`).join('; ');
+    $('error').hidden = false;
+  }
+}).catch(() => {
+  $('error').textContent = 'Could not connect to the server.';
+  $('error').hidden = false;
+});
 api('/negotiation').catch(() => {});
 setInterval(() => { if (!dirty) api('/negotiation').catch(() => {}); }, 2000);
 </script>

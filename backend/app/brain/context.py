@@ -1,14 +1,13 @@
 """
-PERSON B — Exa. Cheap version first, good version only if you are ahead.
+PERSON B — Exa.
 
-Cheap version (about 15 minutes, do this one):
-    Called once at thread start. Result goes into negotiation.market_context
-    and both agents cite it. No per-turn latency, no per-turn cost.
+Cheap version: called once at thread start by loop.start(), result goes into
+negotiation.market_context, both agents cite it.
 
-Good version (only after 02:10):
-    Call this again when the classifier returns COMPLEX, so the agent reaches
-    for fresh evidence exactly when the stakes rise. That wires Exa into the
-    router and is a much better line in the video.
+Good version: classifier.classify() calls this again whenever it decides a
+turn is COMPLEX, replacing negotiation.market_context with fresh evidence
+right as the stakes rise. A failed or empty fetch never overwrites context we
+already have — see the guard in classify().
 """
 
 from __future__ import annotations
