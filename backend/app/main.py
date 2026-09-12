@@ -16,14 +16,17 @@ import threading
 from collections import deque
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import demo_pair, loop
+from .auth import require_human
 from .state import Mandate, Negotiation, Status, new_negotiation
 from .transport import get_transport
+from .transport.ambiguous import provision_coworker
 from .transport.smtp_imap import validate_address
 
 app = FastAPI(title="Port 25")
@@ -55,6 +58,11 @@ class MandatePatch(ThreadPayload):
 
 class ApprovePayload(ThreadPayload):
     edited_body: str = ""
+
+
+class ProvisionPayload(BaseModel):
+    display_name: str
+    role: str = "member"
 
 
 @app.get("/health")
@@ -157,6 +165,20 @@ def do_reject(payload: ThreadPayload | None = None) -> Negotiation:
     if DEMO_PAIR is not None:
         return DEMO_PAIR.stop()
     return loop.reject(NEGOTIATION)
+
+
+@app.post("/coworkers", dependencies=[Depends(require_human)])
+def provision(payload: ProvisionPayload) -> dict:
+    """Auth0-gated: only an authenticated human may mint a new Ambiguous
+    coworker identity. A no-op auth check (see auth.py) until AUTH0_DOMAIN
+    and AUTH0_AUDIENCE are both set, so this can't affect anything today.
+    """
+    try:
+        return provision_coworker(payload.display_name, role=payload.role)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Ambiguous provisioning failed: {exc}") from exc
 
 
 def _check_thread(thread_id: str | None) -> None:
