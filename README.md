@@ -1,266 +1,240 @@
 # Port 25
 
-Two agents at different organisations negotiate by email, because email is the
-only interoperability protocol every company already has. A human supervises
-through a console and steers by moving the mandate, not by reading every message.
+Two AI agents at different organisations negotiate a supply contract by real
+email — not an API, not a shared agent protocol. Email is the one
+interoperability layer every company already has: its own authentication,
+threading, and audit trail, solved in 1982. A human supervises through a
+console and steers by moving a **mandate** (a walk-away price and a max lead
+time), not by reading every message. Every inbound email is tagged
+`routine` / `complex` / `escalate` by a cheap classifier; that tag decides
+both which model drafts the reply *and* whether a human gets interrupted.
+The mandate check itself is plain Python, not a model decision — a model can
+never talk itself into sending an offer worse than the floor.
 
-Agent interoperability has a protocol problem. It was solved in 1982.
+This README describes what the repository actually does today, verified
+against the code, not the original pitch. Where something is stubbed,
+unused, or broken, it says so.
 
 ---
 
-## Run it in 60 seconds
+## State of the project
 
-No API keys needed. The mock transport plays a scripted counterparty.
-
-```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python run_demo.py            # prints a whole negotiation, proves the loop
-uvicorn app.main:app --reload --port 8000
-```
-
-Open http://localhost:8000 for the console.
-
-Copy `.env.example` to `.env` and fill in keys as you get them. Everything
-degrades gracefully: no `OPENAI_API_KEY` means stubbed model output, no
-`EXA_API_KEY` means no market context, and neither crashes the loop.
-
-### Automatic demo with two inboxes you own
-
-One server can run both sides. Set these values in the ignored repo-root `.env`:
-
-```dotenv
-PORT25_TRANSPORT=smtp
-PORT25_DEMO_PAIR=true
-OUR_EMAIL=first-account@gmail.com
-OUR_EMAIL_APP_PASSWORD=first-account-app-password
-COUNTERPARTY_EMAIL=second-account@gmail.com
-COUNTERPARTY_EMAIL_APP_PASSWORD=second-account-app-password
-```
-
-Use a separate app password for each inbox. Both accounts use the shared
-SMTP/IMAP settings by default. Optional `COUNTERPARTY_SMTP_HOST`,
-`COUNTERPARTY_SMTP_PORT`, `COUNTERPARTY_IMAP_HOST`, and `COUNTERPARTY_IMAP_PORT`
-override the second account's server settings when it uses another provider.
-Save credentials only in `.env`, never in `.env.example`.
-
-From the repository root, check both accounts without sending anything:
-
-```powershell
-& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --pair
-```
-
-Then start the server and open http://localhost:8000:
-
-```powershell
-cd backend
-& .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
-```
-
-Choose which configured inbox acts as the buyer and which acts as the seller,
-then choose their regions and a commodity. Primary aluminium is the default;
-copper cathode and hot-rolled steel coil are also available. The same two
-accounts can swap roles between runs. Both logins are checked before the first
-email is sent.
-
-At the start of a run, Exa searches separately for a recent global benchmark and
-for current prices, movement, and premiums in the selected regions. OpenRouter
-turns those source excerpts into a structured brief while preserving the quoted
-USD or EUR currency. The brief and source URLs appear in the console. Its values
-set the buyer's target and ceiling and the seller's floor and opening ask; regional
-signals are capped at ±12% when they enter the automated policy. Every offer then
-travels through SMTP and is received through IMAP.
-
-This mode uses **deterministic demo pricing rules**, labeled in the console.
-Set `PORT25_DEMO_AI=true` and supply `OPENROUTER_API_KEY` in the repo-root `.env`
-to enable OpenRouter wording for both agents and classification of supplier
-replies. Set `EXA_API_KEY` there for market context. Fixed offer terms and the
-six-message cap remain enforced in code. A drafting failure uses a labeled
-fallback; a classification failure pauses for review. With `PORT25_DEMO_AI=false`,
-the same two-inbox demo needs no model keys. With `PORT25_DEMO_PAIR=false`, the
-regular buyer agent is used.
-
-For the integrated dashboard, keep the backend running and start another terminal:
-
-```powershell
-cd web/next
-npm install
-npm run dev
-```
-
-Open http://localhost:3000. It shows the live thread, both inboxes, email activity,
-model labels, and Exa context. **New negotiation** restarts after closure, and
-**Stop both agents** is available during any active run. See [console setup](web/next/README.md).
-
-For the human-supervision beat, lower **Maximum market price** below the seller's
-first quote. The buyer parks its next counteroffer for review; approve the draft
-to continue. **Stop demo** stops both sides.
-Both sides also stop on agreement or after six messages. A failed send stops
-the demo without automatically retrying, since the server may have accepted it.
-State is in memory; after a server restart, start a new thread. Mail already
-sent stays in the two inboxes. Only one active demo runs per server process;
-run one worker and use one runner (console or CLI) at a time for these inboxes.
-
-For an unattended check without the console, run from the repository root:
-
-```powershell
-& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --pair --send --timeout 300
-```
-
-This sends up to six demo emails across the two accounts. `PASS` means the buyer
-received the supplier's agreement. Exit code `3` means the run stopped without
-agreement or needed human approval; start a console demo for interactive approval.
-
-### Verify one inbox with a manual reply (Windows / PowerShell)
-
-Create a repo-root `.env` from `.env.example` if it does not exist. Set
-`OUR_EMAIL`, `OUR_EMAIL_APP_PASSWORD`, and `COUNTERPARTY_EMAIL` locally.
-Use a second inbox you control for `COUNTERPARTY_EMAIL`; reply from that inbox
-manually for this first transport check. Only our inbox needs credentials here.
-Set `PORT25_DEMO_PAIR=false` to use the console with a manual counterparty.
-For Gmail, follow Google's [app password setup](https://support.google.com/accounts/answer/185833)
-(requires 2-Step Verification; availability depends on the account).
-
-From the repository root:
-
-```powershell
-# Checks both SMTP login and IMAP INBOX access. Sends no email.
-& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py
-
-# Sends one test email to COUNTERPARTY_EMAIL and waits up to 180 seconds.
-& .\backend\.venv\Scripts\python.exe .\backend\smoke_smtp.py --send
-```
-
-The second command prints the unique subject to look for. Reply from the second
-inbox, keeping that subject, with `We can offer 12.00 EUR per unit at 21 days lead time.`
-`PASS` means a matching, non-empty reply arrived through IMAP. Exit codes:
-`0` success, `1` configuration/connection error, `2` reply timeout, `130` cancelled.
-Use `--to ADDRESS` to send to a different test inbox or `--timeout 300` to wait longer.
-The timeout controls the reply-wait loop; an in-flight network call can take longer
-(socket timeout: 15 seconds). The command always tests SMTP, even while the app is
-configured to use mock. It does not run the classifier or generate a reply.
-
-After the round trip passes, set `PORT25_TRANSPORT=smtp` in `.env`, then:
-
-```powershell
-cd backend
-& .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
-# In another PowerShell terminal:
-Invoke-RestMethod http://localhost:8000/health
-```
-
-Check for `transport: smtp` and `ok: true`, then open http://localhost:8000 and
-start a negotiation. It uses the configured inboxes and adds a unique subject
-marker. Only replies from the counterparty with that subject enter the agent.
-Polling preserves read/unread flags and accepts replies even if you opened them
-in Gmail first. Duplicate tracking and queued replies last for the process lifetime;
-restart the demo with a new negotiation after restarting the server. Model output
-remains stubbed until the brain's API credentials are configured.
-
-Local regression checks (no mailbox credentials needed):
-
-```powershell
-cd backend
-& .\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-tmp
-& .\.venv\Scripts\python.exe run_demo.py
-```
-
-Install `pytest` into the venv if needed. `--basetemp` keeps test files inside
-the workspace on Windows.
+| Piece | Status |
+|---|---|
+| Negotiation loop, tiered routing, mandate enforcement | Implemented (`backend/app/loop.py`, `state.py`) |
+| Classifier + drafting via OpenRouter | Implemented (`backend/app/brain/`) |
+| Exa market context (single fetch, and refreshed on `complex` turns) | Implemented (`backend/app/brain/context.py`) |
+| Mock transport (in-memory scripted counterparty) | Implemented, always works, no credentials |
+| SMTP/IMAP transport (real Gmail-style inboxes) | Implemented (`backend/app/transport/smtp_imap.py`) |
+| Two-inbox automatic demo (`demo_pair.py`) with commodity/region selection | Implemented |
+| Ambiguous AI transport | **Stub only** — `send()`/`poll()` raise `NotImplementedError`. Selecting `PORT25_TRANSPORT=ambiguous` will not work. |
+| `OPENAI_API_KEY` | Present in config but currently **unused** — every entry in the routing table goes through OpenRouter (`via_openrouter=True`), including the "cheap" tier. |
+| Auth0, CopilotKit | Not integrated anywhere in this codebase. |
+| Static console (`web/index.html`) | Implemented, zero-build, served by FastAPI itself |
+| Next.js console (`web/next/`) | Implemented — plain Next.js 16 + React 19, no CopilotKit dependency. Has a Playwright test suite. |
+| Backend test suite (`pytest`) | 76 tests, all passing as of this writing |
+| `test_classifier.py` (6 bundled fixtures) | **2/6 passing** — see [Known limitations](#known-limitations) |
 
 ---
 
 ## How it works
 
-An inbound email is tagged by a cheap classifier, then routed one of three ways.
+### Two operating modes
 
-| Tier | What it means | What happens |
+The backend supports two distinct ways of running a negotiation, chosen by
+environment variables, not by different code paths in the console:
+
+**1. Single-agent loop** (`app/loop.py`) — the default. One transport (mock,
+smtp, or the unimplemented ambiguous) plays *our* side; a scripted or human
+counterparty plays the other. The scenario is hardcoded: EUR, "per unit",
+electronic components. Every inbound email goes through
+`classify()` → `draft_reply()` → send-or-park, exactly once per email.
+
+**2. Two-inbox demo** (`app/demo_pair.py`, `PORT25_DEMO_PAIR=true`) — one
+backend process owns *two* real inboxes (via SMTP/IMAP) and plays both the
+buyer and the supplier automatically. Commodity (aluminium / copper / steel),
+buyer region, and supplier region are chosen at negotiation start. Pricing is
+governed by an explicit, code-bounded policy in `demo_pair.py` — a model
+never sets a number. Set `PORT25_DEMO_AI=true` to additionally let OpenRouter
+classify supplier replies and write a single constrained courtesy sentence
+per email (`app/brain/demo_drafting.py`), and let Exa produce a structured
+market brief (`app/brain/context.py::research_commodity_market`) that sets
+the opening target/floor/ask. With `PORT25_DEMO_AI=false` this mode needs no
+model API keys at all.
+
+### Tiered routing (mode 1)
+
+| Tier | Meaning | What happens |
 |---|---|---|
-| routine | they restated or conceded within known terms | fast model drafts, sends itself |
-| complex | they introduced a new argument or trade-off | stronger model via OpenRouter, still sends itself |
-| escalate | outside the mandate, or a structural change | drafted and parked for a human |
+| `routine` | counterparty restated or conceded within known terms | fast model drafts, sends itself |
+| `complex` | they introduced a new argument or trade-off | stronger model, still sends itself |
+| `escalate` | outside the mandate, or a structural/legal change | drafted and parked for a human |
 
-We route on **consequence**, not complexity. The same ladder decides both which
-model runs and whether a person gets interrupted.
+The routing table (`app/brain/router.py`) is a plain dict, not a model
+decision:
 
-The mandate check in `state.py::is_within_mandate` is code, not a model
-decision. The classifier can raise a turn to `escalate`; it can never lower one.
+```python
+ROUTINE:  ("openai/gpt-4o-mini",        via OpenRouter)
+COMPLEX:  ("anthropic/claude-sonnet-4.5", via OpenRouter)
+ESCALATE: ("anthropic/claude-sonnet-4.5", via OpenRouter)
+```
 
----
-
-## Who owns what
-
-Everyone reads `backend/app/state.py` first. That file is the contract. If a
-field needs to change, say it out loud — all three workstreams touch it.
-
-**Person A — transport.** `app/transport/`
-Provision two Ambiguous coworkers, get one email round-tripping A to B to A.
-**Hard gate at 00:50**: if it hasn't happened, set `PORT25_TRANSPORT=smtp` and
-move on. The SMTP fallback is still real email, so the pitch survives.
-
-**Person B — brain.** `app/brain/`
-Start with `python test_classifier.py` — it runs against fixtures and needs no
-transport and no console. Then the routing table, then drafting. Exa last.
-
-**Person C — console.** `web/`
-The static console in this repo already works. Build the CopilotKit version
-alongside it, pointing at the same API. You also own the video: script it at
-02:10, record at 02:30.
+`state.py::Negotiation.is_within_mandate()` is the one rule that isn't a
+model decision. The classifier can raise a turn to `escalate`; it can never
+lower one, no matter what a model returns.
 
 ---
 
-## Timeline
+## Setup
 
-| Time | Milestone |
-|---|---|
-| 00:20 | contract agreed, keys distributed, split |
-| 00:50 | **hard gate** — email round-trips, or switch to SMTP |
-| 01:20 | agent drafts a real offer with market context |
-| 01:40 | tier routing live, model choice visible |
-| 02:10 | console shows the thread, approve and reject work |
-| 02:30 | **the demo beat** — slider changes the next email. Record after this |
-| 02:50 | repo, description, social post |
+Requires Python 3.12 and (for the Next.js console) Node.js.
+
+```bash
+git clone <this repo> && cd port25
+
+# .env lives at the REPO ROOT, not backend/.env — backend/app/__init__.py's
+# load_dotenv() resolves it as three directories up from itself, i.e. here.
+cp .env.example .env
+# fill in whichever keys you have; everything degrades gracefully (see below)
+
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+python run_demo.py                       # smoke test against the mock transport, no keys needed
+uvicorn app.main:app --reload --port 8000
+```
+
+Open `http://localhost:8000` for the static console (`web/index.html`,
+mounted by FastAPI itself). For the Next.js console instead:
+
+```bash
+cd web/next
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`; see [`web/next/README.md`](web/next/README.md)
+for what that console shows and its `NEXT_PUBLIC_PORT25_API` setting.
 
 ---
 
-## The demo beat
+## Configuration reference
 
-Mid-negotiation, drag the walk-away floor upward. The agent's next email visibly
-hardens, and the turn after that escalates to tier 3 because the new floor puts
-the counterparty's ask out of bounds. Fifteen seconds, and it shows a person
-steering a live agent rather than reading its output.
+Everything below lives in the repo-root `.env` (copy from `.env.example`).
+Nothing here is required to see the loop run — the mock transport and stub
+model output work with zero keys.
 
-Rehearse it twice before recording. Start recording with the thread already two
-turns deep so the video opens at the interesting part.
+| Variable | Purpose | If unset |
+|---|---|---|
+| `PORT25_TRANSPORT` | `mock` (default), `smtp`, or `ambiguous` (unimplemented) | defaults to `mock` |
+| `OPENAI_API_KEY` | accepted by `llm.py` for a non-OpenRouter call path | **currently dead** — nothing in the routing table uses it |
+| `OPENROUTER_API_KEY` | required for real classifier/drafting output | model calls return a labelled stub string; the loop still runs |
+| `EXA_API_KEY` | market context and the two-inbox demo's market brief | market context is blank; demo pricing falls back to a hardcoded benchmark |
+| `PORT25_DEMO_AI` | `true` to let OpenRouter classify/word the two-inbox demo | `false` — that mode runs on fixed rules only |
+| `AMBIGUOUS_API_KEY`, `AMBIGUOUS_OUR_AGENT_ID`, `AMBIGUOUS_THEIR_AGENT_ID` | read by the Ambiguous transport stub | irrelevant until that transport is implemented |
+| `OUR_EMAIL`, `OUR_EMAIL_APP_PASSWORD` | primary inbox for `smtp` transport | `smtp` transport refuses to start |
+| `COUNTERPARTY_EMAIL`, `COUNTERPARTY_EMAIL_APP_PASSWORD` | second inbox, required for `PORT25_DEMO_PAIR=true` | two-inbox demo refuses to start |
+| `SMTP_HOST` / `SMTP_PORT`, `IMAP_HOST` / `IMAP_PORT` | mail server settings, default to Gmail | Gmail defaults apply |
+| `COUNTERPARTY_SMTP_HOST` / `..._PORT`, `COUNTERPARTY_IMAP_HOST` / `..._PORT` | override the second inbox's server if it's a different provider | falls back to the primary account's settings |
+| `PORT25_DEMO_PAIR` | `true` to run the two-inbox automatic demo | `false` — regular single-agent loop |
+
+For Gmail, an app password requires 2-Step Verification
+([setup guide](https://support.google.com/accounts/answer/185833)).
+
+---
+
+## Testing
+
+```bash
+cd backend
+python -m pytest -q          # 76 tests: main.py endpoints, demo_pair, demo_ai
+                              # wording guard, .env loading, smtp/imap transport
+python run_demo.py           # scripted mock-transport negotiation, prints the thread
+python test_classifier.py    # checks 6 bundled fixtures — see limitations below
+```
+
+For the SMTP transport specifically, `backend/smoke_smtp.py` checks
+credentials and can send/receive a real test email without going through the
+console — run `python smoke_smtp.py --help` for its flags, or `--pair` to
+check both inboxes for the two-inbox demo.
 
 ---
 
 ## API
 
 ```
-GET    /health                     transport name and whether credentials work
-POST   /negotiation                select roles/market, research it, send opening offer
-GET    /negotiation                current state (console polls this)
-PATCH  /negotiation/mandate        move the floor — the demo beat
-POST   /negotiation/approve        send the parked draft, optionally edited
-POST   /negotiation/reject         walk away
+GET    /health                     transport status; in demo_pair mode also
+                                    returns selectable accounts/commodities/regions
+POST   /negotiation                start a thread. Body (all optional, only
+                                    meaningful in demo_pair mode): buyer_account,
+                                    supplier_account, commodity, buyer_region,
+                                    supplier_region
+GET    /negotiation                current state (both consoles poll this)
+PATCH  /negotiation/mandate         move the floor/target/lead-time cap
+POST   /negotiation/approve         send the parked draft, optionally edited
+POST   /negotiation/reject          walk away / stop the demo
 ```
 
-The start body accepts `buyer_account`, `supplier_account`, `commodity`,
-`buyer_region`, and `supplier_region`. `GET /health` returns the safe selectable
-options and configured email addresses; credentials never enter the browser.
+`PATCH`/`POST` mutating calls accept an optional `thread_id`; if it doesn't
+match the current negotiation, the API returns 409 rather than mutating a
+thread the caller can no longer see. There is no authentication on any
+endpoint.
 
 ---
 
-## Things that will bite you
+## Project layout
 
-Two polite agents will email each other until the credits run out. `max_turns`
-is 6. Do not raise it for the demo.
+```
+backend/app/state.py           Negotiation, Mandate, Tier, Status — the shared
+                                data contract every other module reads/writes
+backend/app/loop.py             single-agent loop: one inbound email in, one
+                                outbound email or one human pause out
+backend/app/demo_pair.py        two-inbox automatic demo, code-bounded pricing
+backend/app/main.py             FastAPI app, in-memory single-negotiation state
+backend/app/brain/              classifier, router, drafting, Exa context
+backend/app/transport/          mock / smtp+imap (real) / ambiguous (stub)
+backend/fixtures/               6 example inbound emails for the classifier
+web/index.html                  static, zero-build console (FastAPI-served)
+web/next/                       Next.js console with a Playwright test suite
+```
 
-Email latency kills video. Pre-warm the Exa call and start recording with the
-thread already in progress.
+There is one negotiation (or one `DemoPair`) held in a module-level global in
+`main.py` — it does not persist across a restart, and running more than one
+`uvicorn` worker will produce inconsistent state.
 
-The `reason` string from the classifier is not debug output — it appears on
-screen and is a large part of what judges read. Write the prompt so it comes
-back in plain language.
+---
+
+## Known limitations
+
+- **Ambiguous AI transport is unimplemented.** `app/transport/ambiguous.py`
+  raises `NotImplementedError` on both `send()` and `poll()`. Real API
+  documentation for provisioning a coworker's mailbox and reading/sending
+  through it was not available at the time this was scaffolded — only the
+  coworker-provisioning endpoint shape was confirmed
+  (`POST /api/admin/users/provision-agent`,
+  `Authorization: Bearer ak_...`), and guessing the mail-specific endpoints
+  risked shipping a transport that fails silently. Use `mock` or `smtp`.
+- **`OPENAI_API_KEY` is dead code.** Every entry in `ROUTING_TABLE`
+  (`app/brain/router.py`) sets `via_openrouter=True`, so `llm.py`'s
+  OpenAI-direct path is never exercised. The variable is kept in
+  `.env.example` for anyone who later routes a tier directly to OpenAI.
+- **The default mandate doesn't match the single-agent demo's scripted
+  counterparty.** `state.py::new_negotiation()` sets
+  `floor_price_eur=12.50`, but the mock transport's (and the bundled
+  classifier fixtures') opening counter-offer is `15.80 EUR` — above that
+  floor. Because `is_within_mandate()` force-escalates any offer above the
+  floor regardless of what the classifier itself decides, this means: (a)
+  `python test_classifier.py` currently scores **2/6**, and (b) a
+  single-agent-loop negotiation escalates to a human on the very first
+  inbound reply instead of running the intended several autonomous rounds
+  first. This does not affect the two-inbox demo (`demo_pair.py`), which
+  computes its mandate dynamically from the Exa market brief rather than
+  using this static default. Raising `floor_price_eur` (e.g. to `16.00`)
+  fixes both symptoms, but that's a change to the shared state contract and
+  hasn't been applied pending confirmation.
+- **No authentication anywhere.** Any client that can reach the API can move
+  the mandate, approve a draft, or start/stop a negotiation.
+- **Single process, single negotiation.** State is an in-memory global; a
+  restart loses it, and multiple workers will race on it.
