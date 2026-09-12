@@ -26,12 +26,17 @@ in the root `.env` for the two-account AI-assisted demo. OpenRouter drafts wordi
 for both sides and classifies incoming supplier replies; Exa supplies market
 context. Demo prices remain bounded by the explicit policy in the backend.
 
-The console shows the actual single negotiation, emails, model labels, and
-timestamps. Start a thread, adjust the buyer's maximum price, review and edit
-parked replies, or stop both agents. After a run closes, **New negotiation**
-starts a fresh email subject. An API failure is shown without substituting
-sample conversations. An approval or limit change includes the displayed thread
-ID so a stale browser cannot modify a newer thread.
+The opening screen requires a buyer inbox, seller inbox, commodity, and one region
+for each side. The two configured accounts may swap roles, but the same inbox
+cannot occupy both roles. Aluminium, copper, and steel scenarios use current Exa
+benchmark and regional evidence to establish both agents' opening limits.
+
+The console shows the actual single negotiation, source currency, regional market
+brief, emails, model labels, and timestamps. Adjust the buyer's maximum price,
+review and edit parked replies, or stop both agents. After a run closes,
+**Configure another negotiation** returns to role selection. An API failure is
+shown without substituting sample conversations. An approval or limit change
+includes the displayed thread ID so a stale browser cannot modify a newer thread.
 
 Run `npm test` for console behavior checks and `npm run build` for the production
 build. `npm start` serves the built console. Run a single backend worker because

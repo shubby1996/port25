@@ -34,8 +34,10 @@ def draft_reply(negotiation: Negotiation, inbound_body: str, tier: Tier) -> tupl
     )
 
     prompt = (
-        f"Mandate: floor {negotiation.mandate.floor_price_eur} EUR/unit, "
-        f"target {negotiation.mandate.target_price_eur} EUR/unit, "
+        f"Purchase: {negotiation.quantity} metric tonnes of {negotiation.commodity}; "
+        f"buyer region {negotiation.buyer_region}, supplier region {negotiation.supplier_region}.\n"
+        f"Mandate: maximum {negotiation.mandate.floor_price_eur} {negotiation.currency}/{negotiation.price_unit}, "
+        f"target {negotiation.mandate.target_price_eur} {negotiation.currency}/{negotiation.price_unit}, "
         f"max {negotiation.mandate.max_lead_time_days} days.\n"
         f"Our last position: {negotiation.our_position.model_dump()}\n"
         f"Their last position: {negotiation.their_position.model_dump()}\n"

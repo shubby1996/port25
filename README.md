@@ -58,13 +58,19 @@ cd backend
 & .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
 ```
 
-Click **Start two-inbox demo**. Both logins are checked before the first send.
-The buyer emails an opening offer of 10.00 EUR at 21 days, the supplier counters
-at 12.00 EUR, the buyer offers 11.00 EUR, and the supplier agrees. Every message
-travels through SMTP and is received through IMAP; no manual replies are needed.
-The console labels each side and shows the received negotiation. The supplier
-has an independent minimum price of 11.00 EUR, and the buyer's maximum starts at
-12.50 EUR.
+Choose which configured inbox acts as the buyer and which acts as the seller,
+then choose their regions and a commodity. Primary aluminium is the default;
+copper cathode and hot-rolled steel coil are also available. The same two
+accounts can swap roles between runs. Both logins are checked before the first
+email is sent.
+
+At the start of a run, Exa searches separately for a recent global benchmark and
+for current prices, movement, and premiums in the selected regions. OpenRouter
+turns those source excerpts into a structured brief while preserving the quoted
+USD or EUR currency. The brief and source URLs appear in the console. Its values
+set the buyer's target and ceiling and the seller's floor and opening ask; regional
+signals are capped at ±12% when they enter the automated policy. Every offer then
+travels through SMTP and is received through IMAP.
 
 This mode uses **deterministic demo pricing rules**, labeled in the console.
 Set `PORT25_DEMO_AI=true` and supply `OPENROUTER_API_KEY` in the repo-root `.env`
@@ -87,9 +93,9 @@ Open http://localhost:3000. It shows the live thread, both inboxes, email activi
 model labels, and Exa context. **New negotiation** restarts after closure, and
 **Stop both agents** is available during any active run. See [console setup](web/next/README.md).
 
-For the human-supervision beat, lower **Maximum unit price** to 11.00 EUR before
-the supplier's first quote arrives. The buyer pauses when it receives 12.00 EUR;
-approve its 11.00 EUR counteroffer to continue. **Stop demo** stops both sides.
+For the human-supervision beat, lower **Maximum market price** below the seller's
+first quote. The buyer parks its next counteroffer for review; approve the draft
+to continue. **Stop demo** stops both sides.
 Both sides also stop on agreement or after six messages. A failed send stops
 the demo without automatically retrying, since the server may have accepted it.
 State is in memory; after a server restart, start a new thread. Mail already
@@ -234,12 +240,16 @@ turns deep so the video opens at the interesting part.
 
 ```
 GET    /health                     transport name and whether credentials work
-POST   /negotiation                open a thread, send the opening offer
+POST   /negotiation                select roles/market, research it, send opening offer
 GET    /negotiation                current state (console polls this)
 PATCH  /negotiation/mandate        move the floor — the demo beat
 POST   /negotiation/approve        send the parked draft, optionally edited
 POST   /negotiation/reject         walk away
 ```
+
+The start body accepts `buyer_account`, `supplier_account`, `commodity`,
+`buyer_region`, and `supplier_region`. `GET /health` returns the safe selectable
+options and configured email addresses; credentials never enter the browser.
 
 ---
 

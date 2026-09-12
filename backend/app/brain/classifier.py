@@ -41,15 +41,17 @@ tier is one of:
              what else is in the message.
 
 reason: one short plain sentence a busy person can read at a glance.
-extracted: any price in EUR per unit and any lead time in days they named,
+extracted: the offered numeric price in the negotiation currency and any lead time in days they named,
            or null if they named none.
 """
 
 
 def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Position]:
     prompt = (
-        f"Our maximum purchase price is {negotiation.mandate.floor_price_eur} EUR per unit "
+        f"We are buying {negotiation.quantity} metric tonnes of {negotiation.commodity}. "
+        f"Our maximum purchase price is {negotiation.mandate.floor_price_eur} {negotiation.currency} per {negotiation.price_unit} "
         f"and max {negotiation.mandate.max_lead_time_days} days lead time.\n"
+        f"Buyer region: {negotiation.buyer_region}; supplier region: {negotiation.supplier_region}.\n"
         f"Our current offer: {negotiation.our_position.model_dump()}\n\n"
         f"Their email:\n{inbound_body}"
     )
@@ -94,7 +96,7 @@ def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Po
     if tier is Tier.COMPLEX:
         fresh_context = fetch_market_context(
             f"{negotiation.subject} — market pricing benchmark for a unit price "
-            f"near {position.unit_price_eur} EUR" if position.unit_price_eur
+            f"near {position.unit_price_eur} {negotiation.currency}" if position.unit_price_eur
             else f"{negotiation.subject} — market pricing benchmark"
         )
         if fresh_context:

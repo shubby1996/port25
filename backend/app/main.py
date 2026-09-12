@@ -57,11 +57,21 @@ class ApprovePayload(ThreadPayload):
     edited_body: str = ""
 
 
+class StartPayload(BaseModel):
+    buyer_account: str = "primary"
+    supplier_account: str = "secondary"
+    commodity: str = "aluminium"
+    buyer_region: str = "Europe"
+    supplier_region: str = "North America"
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     if demo_pair.enabled():
         if transport.name != "smtp":
             return {"transport": transport.name, "ok": False, "mode": "demo_pair", "detail": "Two-inbox demo requires PORT25_TRANSPORT=smtp"}
+        if DEMO_PAIR is not None:
+            return DEMO_PAIR.healthcheck()
         try:
             return demo_pair.from_environment().healthcheck()
         except ValueError as exc:
@@ -71,20 +81,27 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/negotiation")
-def create() -> Negotiation:
+def create(payload: StartPayload | None = None) -> Negotiation:
     with CREATE_LOCK:
-        return _create()
+        return _create(payload or StartPayload())
 
 
-def _create() -> Negotiation:
+def _create(payload: StartPayload | None = None) -> Negotiation:
     global NEGOTIATION, DEMO_PAIR
+    payload = payload or StartPayload()
     if DEMO_PAIR is not None and DEMO_PAIR.state.status is not Status.CLOSED:
         raise HTTPException(409, "Stop the current two-inbox demo before starting another")
     if demo_pair.enabled():
         if transport.name != "smtp":
             raise HTTPException(503, "Two-inbox demo requires PORT25_TRANSPORT=smtp")
         try:
-            pair = demo_pair.from_environment()
+            pair = demo_pair.from_environment(
+                buyer_account=payload.buyer_account,
+                supplier_account=payload.supplier_account,
+                commodity=payload.commodity,
+                buyer_region=payload.buyer_region,
+                supplier_region=payload.supplier_region,
+            )
         except ValueError as exc:
             raise HTTPException(503, str(exc)) from exc
         health = pair.healthcheck()

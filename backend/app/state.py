@@ -85,6 +85,16 @@ class Negotiation(BaseModel):
     counterparty_email: str = ""
     our_email: str = ""
 
+    # Scenario metadata. The legacy numeric field names are retained so the
+    # transport and classifier contract stays stable while the visible price
+    # basis can represent a commodity tonne instead of a manufactured unit.
+    commodity: str = "Electronic components"
+    quantity: int = 1
+    price_unit: str = "unit"
+    currency: str = "EUR"
+    buyer_region: str = "Europe"
+    supplier_region: str = "Europe"
+
     mandate: Mandate
     our_position: Position = Field(default_factory=Position)
     their_position: Position = Field(default_factory=Position)

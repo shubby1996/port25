@@ -85,6 +85,14 @@ button:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
 button:disabled{opacity:.5;cursor:wait}
 .error{color:var(--alert);border:1px solid var(--alert);padding:12px}
 .empty{margin-top:48px;text-align:center;color:var(--muted)}
+.setup{background:var(--rail);border:1px solid var(--edge);display:grid;gap:14px;
+  grid-template-columns:1fr 1fr;margin:20px auto;max-width:720px;padding:22px;text-align:left}
+.setup label{font-family:var(--mono);font-size:11px;text-transform:uppercase}
+.setup select{display:block;margin-top:5px;padding:9px;width:100%}
+.setup .wide,.setup button{grid-column:1/-1}
+.market{background:var(--rail);border:1px solid var(--edge);font:12px/1.6 var(--mono);
+  margin-top:28px;overflow-wrap:anywhere;padding:16px;white-space:pre-wrap}
+@media(max-width:650px){.setup{grid-template-columns:1fr}.setup .wide,.setup button{grid-column:1}}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -117,11 +125,19 @@ button:disabled{opacity:.5;cursor:wait}
   </div>
 
   <div class="empty" id="empty">
-    <p id="emptyText">No negotiation running.</p>
-    <button id="startBtn">Open a thread</button>
+    <p id="emptyText">Choose the buyer, seller, regions, and commodity.</p>
+    <div class="setup">
+      <label>Buyer inbox<select id="buyerAccount"></select></label>
+      <label>Buyer region<select id="buyerRegion"></select></label>
+      <label>Seller inbox<select id="sellerAccount"></select></label>
+      <label>Seller region<select id="sellerRegion"></select></label>
+      <label class="wide">Commodity<select id="commodity"></select></label>
+      <button id="startBtn">Research market & start agents</button>
+    </div>
   </div>
 
   <div class="thread" id="thread"></div>
+  <div class="market" id="market" hidden></div>
 
   <div class="approval" id="approval" hidden>
     <h2>Your agent stopped and is waiting</h2>
@@ -137,14 +153,14 @@ button:disabled{opacity:.5;cursor:wait}
 <script>
 const API = location.port === '8000' ? '' : 'http://localhost:8000';
 const $ = id => document.getElementById(id);
-let state = null, dirty = false;
+let state = null, dirty = false, setup = null;
 
-const PRICE_MIN = 9, PRICE_MAX = 18;
+let PRICE_MIN = 9, PRICE_MAX = 18;
 const pct = v => ((PRICE_MAX - v) / (PRICE_MAX - PRICE_MIN)) * 100;
 
 function renderTicks() {
-  $('ticks').innerHTML = [10, 12, 14, 16, 18]
-    .map(v => `<div class="tick" style="top:${pct(v)}%">${v.toFixed(2)}</div>`).join('');
+  $('ticks').innerHTML = Array.from({length:5}, (_, i) => PRICE_MIN + (PRICE_MAX - PRICE_MIN) * i / 4)
+    .map(v => `<div class="tick" style="top:${pct(v)}%">${state?.currency || 'EUR'} ${v.toFixed(0)}</div>`).join('');
 }
 
 function render() {
@@ -156,11 +172,10 @@ function render() {
     : state.status === 'closed' ? '' : 'live');
 
   $('empty').hidden = state.status !== 'closed';
-  $('emptyText').textContent = 'This negotiation has finished.';
-  $('startBtn').textContent = 'Start another negotiation';
+  $('emptyText').textContent = 'Configure another commodity negotiation.';
   $('sessionActions').hidden = state.status === 'closed';
   $('accounts').hidden = false;
-  $('accounts').textContent = `Buyer: ${state.our_email} | Supplier: ${state.counterparty_email}`;
+  $('accounts').textContent = `${state.commodity} · ${state.quantity} metric tonnes | Buyer: ${state.our_email} (${state.buyer_region}) | Seller: ${state.counterparty_email} (${state.supplier_region})`;
   $('outcome').hidden = state.status !== 'closed';
   $('outcome').textContent = state.our_position.note || 'Negotiation closed.';
   $('gauge').hidden = false;
@@ -169,27 +184,34 @@ function render() {
   const ours = state.our_position.unit_price_eur;
   const theirs = state.their_position.unit_price_eur;
   const floor = state.mandate.floor_price_eur;
+  const allPrices = [ours, theirs, floor, state.mandate.target_price_eur].filter(v => v != null);
+  PRICE_MIN = Math.floor(Math.min(...allPrices) * .9 / 5) * 5;
+  PRICE_MAX = Math.ceil(Math.max(...allPrices) * 1.1 / 5) * 5;
+  renderTicks();
 
   $('floor').style.top = pct(floor) + '%';
   if (ours != null) {
     $('mOurs').style.top = pct(ours) + '%';
-    $('mOurs').querySelector('.lab').textContent = `we offer ${ours.toFixed(2)}`;
+    $('mOurs').querySelector('.lab').textContent = `buyer offers ${state.currency} ${ours.toFixed(0)}/t`;
   }
   if (theirs != null) {
     $('mTheirs').style.top = pct(theirs) + '%';
-    $('mTheirs').querySelector('.lab').textContent = `they ask ${theirs.toFixed(2)}`;
+    $('mTheirs').querySelector('.lab').textContent = `seller asks ${state.currency} ${theirs.toFixed(0)}/t`;
   }
   $('gauge').classList.toggle('breach', theirs != null && theirs > floor);
 
   if (!dirty) {
     $('floorRange').value = floor;
-    $('floorOut').textContent = floor.toFixed(2) + ' EUR';
+    $('floorRange').min = PRICE_MIN;
+    $('floorRange').max = PRICE_MAX;
+    $('floorRange').step = 5;
+    $('floorOut').textContent = `${state.currency} ${floor.toFixed(0)}/t`;
   }
 
   $('thread').innerHTML = state.turns.map(t => {
     const tier = t.tier ? `<span class="tier ${t.tier}">${t.tier}</span>` : '';
     const model = t.model_used ? `<span>${esc(t.model_used)}</span>` : '';
-    const sender = `<span>${t.direction === 'out' ? 'Buyer → Supplier' : 'Supplier → Buyer'}</span>`;
+    const sender = `<span>${t.direction === 'out' ? 'Buyer → Seller' : 'Seller → Buyer'}</span>`;
     const human = t.approved_by_human ? '<span>approved by a person</span>' : '';
     const reason = t.reason ? `<span class="reason">${esc(t.reason)}</span>` : '';
     return `<article class="letter ${t.direction}">
@@ -197,6 +219,8 @@ function render() {
       <div class="stamp">${sender}${tier}${model}${human}${reason}</div>
     </article>`;
   }).join('');
+  $('market').hidden = !state.market_context;
+  $('market').textContent = state.market_context || '';
 
   const waiting = state.status === 'awaiting';
   $('approval').hidden = !waiting;
@@ -229,8 +253,17 @@ async function api(path, opts) {
 }
 
 $('startBtn').onclick = async () => {
+  if (!setup || $('buyerAccount').value === $('sellerAccount').value) {
+    $('error').textContent = 'Buyer and seller must use different inboxes.';
+    $('error').hidden = false;
+    return;
+  }
   $('startBtn').disabled = true;
-  try { await api('/negotiation', {method: 'POST'}); }
+  try { await api('/negotiation', {method: 'POST', body: JSON.stringify({
+    buyer_account: $('buyerAccount').value, supplier_account: $('sellerAccount').value,
+    commodity: $('commodity').value, buyer_region: $('buyerRegion').value,
+    supplier_region: $('sellerRegion').value
+  })}); }
   finally { $('startBtn').disabled = false; }
 };
 $('approveBtn').onclick = () => {
@@ -245,7 +278,7 @@ let debounce;
 $('floorRange').oninput = e => {
   dirty = true;
   const v = parseFloat(e.target.value);
-  $('floorOut').textContent = v.toFixed(2) + ' EUR';
+  $('floorOut').textContent = `${state.currency} ${v.toFixed(0)}/t`;
   $('floor').style.top = pct(v) + '%';
   clearTimeout(debounce);
   debounce = setTimeout(async () => {
@@ -262,7 +295,18 @@ fetch(API + '/health').then(r => r.json()).then(health => {
   $('modeInfo').textContent = paired
     ? 'Two inboxes · automatic buyer and supplier · demo pricing rules'
     : 'Buyer agent · counterparty replies through the selected transport';
-  if (!state && paired) $('startBtn').textContent = 'Start two-inbox demo';
+  setup = health.setup;
+  if (setup) {
+    $('buyerAccount').innerHTML = setup.accounts.map(x => `<option value="${esc(x.id)}">${esc(x.email)}</option>`).join('');
+    $('sellerAccount').innerHTML = $('buyerAccount').innerHTML;
+    $('buyerRegion').innerHTML = setup.regions.map(x => `<option>${esc(x)}</option>`).join('');
+    $('sellerRegion').innerHTML = $('buyerRegion').innerHTML;
+    $('commodity').innerHTML = setup.commodities.map(x => `<option value="${esc(x.id)}">${esc(x.label)} · ${x.quantity} metric tonnes</option>`).join('');
+    Object.entries(setup.defaults).forEach(([key, value]) => {
+      const ids = {buyer_account:'buyerAccount',supplier_account:'sellerAccount',commodity:'commodity',buyer_region:'buyerRegion',supplier_region:'sellerRegion'};
+      if (ids[key]) $(ids[key]).value = value;
+    });
+  }
   if (!health.ok) {
     $('error').textContent = health.detail || Object.entries(health.accounts || {})
       .filter(([, account]) => !account.ok).map(([role, account]) => `${role}: ${account.detail}`).join('; ');

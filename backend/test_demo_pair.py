@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 import smoke_smtp
 from app import demo_pair, main
+from app.brain.context import MarketBrief
 from app.state import Status, Tier, Position
 
 
@@ -85,8 +86,11 @@ def test_both_accounts_exchange_email_and_agree(email_network):
     run_until_paused(pair)
     assert pair.outcome == "agreement"
     assert pair.state.status is Status.CLOSED
-    assert pair.state.our_position.unit_price_eur == 11
-    assert pair.state.their_position.unit_price_eur == 11
+    assert pair.state.our_position.unit_price_eur == pair.state.their_position.unit_price_eur
+    assert pair.state.our_position.unit_price_eur >= pair.supplier_floor
+    assert pair.state.commodity == "Primary aluminium"
+    assert pair.state.quantity == 100
+    assert pair.state.price_unit == "metric tonne"
     assert [turn.direction for turn in pair.state.turns] == ["out", "in", "out", "in"]
     assert all(turn.model_used == "demo rules" for turn in pair.state.turns)
     assert [item[0] for item in email_network[0]] == ["buyer@example.com", "supplier@example.com"] * 2
@@ -112,12 +116,15 @@ def test_supplier_waits_for_delivery_in_its_own_inbox(email_network):
 
 def test_pause_approve_and_resume_both_accounts(email_network):
     state = main.create()
-    main.patch_mandate(main.MandatePatch(floor_price_eur=11.00))
     pair = main.DEMO_PAIR
+    ceiling = pair.supplier_ask - 5
+    main.patch_mandate(main.MandatePatch(floor_price_eur=ceiling))
     run_until_paused(pair)
     assert state.status is Status.AWAITING_APPROVAL
     assert state.turns[-1].tier.value == "escalate"
-    assert "11.00 EUR" in state.pending_draft
+    pending = demo_pair.extract_position(state.pending_draft)
+    assert pending.unit_price_eur <= ceiling
+    assert pending.unit_price_eur >= pair.supplier_floor
     for _ in range(5):
         pair.tick()
     assert len(email_network[0]) == 2
@@ -152,9 +159,9 @@ def test_old_emails_do_not_restart_new_demo(email_network):
 
 def test_non_agreeing_supplier_hits_six_message_limit(email_network):
     pair = demo_pair.from_environment()
-    pair.supplier_floor = 12.4
-    pair.supplier_ask = 12.4
     pair.start()
+    pair.supplier_floor = pair.state.mandate.floor_price_eur * .98
+    pair.supplier_ask = pair.state.mandate.floor_price_eur * .99
     run_until_paused(pair)
     assert pair.outcome == "turn_limit"
     assert pair.state.turn_count == 6
@@ -264,14 +271,23 @@ def test_ai_pair_uses_both_roles_and_market_context(email_network, monkeypatch):
     classify = MagicMock(return_value=(Tier.ROUTINE, "Familiar terms", Position()))
     monkeypatch.setattr(demo_pair, "draft_fixed_offer", draft)
     monkeypatch.setattr(demo_pair, "classify", classify)
-    monkeypatch.setattr(demo_pair, "fetch_market_context", lambda *a, **k: "Verified market context")
+    monkeypatch.setattr(demo_pair, "research_commodity_market", lambda *a, **k: MarketBrief(
+        benchmark_price_per_metric_tonne=3_000,
+        currency="USD",
+        change_pct_30d=4,
+        buyer_region_adjustment_pct=1,
+        supplier_region_adjustment_pct=3,
+        summary="Aluminium rose four percent across the selected regions.",
+        evidence="- Verified market context",
+    ))
     pair = demo_pair.from_environment()
     pair.start()
     run_until_paused(pair)
     assert pair.outcome == "agreement"
-    assert pair.state.our_position.unit_price_eur == 11
+    assert pair.state.our_position.unit_price_eur >= pair.supplier_floor
+    assert "Reported movement (30 days): +4.0%" in pair.state.market_context
     assert [call.kwargs["role"] for call in draft.call_args_list] == ["buyer", "supplier", "buyer", "supplier"]
-    assert all(call.kwargs["context"] == "Verified market context" for call in draft.call_args_list)
+    assert all("Verified market context" in call.kwargs["context"] for call in draft.call_args_list)
     assert classify.call_count == 2
     assert all("openai/gpt-4o-mini" in turn.model_used for turn in pair.state.turns)
     assert len(email_network[0]) == 4
@@ -281,10 +297,66 @@ def test_ai_classification_failure_pauses_before_next_send(email_network, monkey
     pair = demo_pair.from_environment()
     pair.use_ai = True
     monkeypatch.setattr(demo_pair, "draft_fixed_offer", lambda body, **kwargs: (body, "test-model"))
-    monkeypatch.setattr(demo_pair, "fetch_market_context", lambda *a, **k: "")
+    monkeypatch.setattr(demo_pair, "research_commodity_market", lambda *a, **k: MarketBrief(
+        benchmark_price_per_metric_tonne=2_900,
+        currency="USD",
+        change_pct_30d=0,
+        buyer_region_adjustment_pct=0,
+        supplier_region_adjustment_pct=2,
+        summary="Current aluminium evidence for the selected regions.",
+    ))
     monkeypatch.setattr(demo_pair, "classify", MagicMock(side_effect=TimeoutError))
     pair.start()
     run_until_paused(pair)
     assert pair.state.status is Status.AWAITING_APPROVAL
     assert "classification failed" in pair.state.turns[-1].reason
     assert len(email_network[0]) == 2
+
+
+def test_regional_market_gap_changes_both_policies_and_reaches_agreement(email_network, monkeypatch):
+    monkeypatch.setenv("PORT25_DEMO_AI", "true")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(demo_pair, "draft_fixed_offer", lambda body, **kwargs: (body, "openai/gpt-4o-mini"))
+    monkeypatch.setattr(demo_pair, "classify", lambda *a, **k: (Tier.ROUTINE, "Market-priced offer", Position()))
+    monkeypatch.setattr(demo_pair, "research_commodity_market", lambda *a, **k: MarketBrief(
+        benchmark_price_per_metric_tonne=3_325,
+        currency="USD",
+        change_pct_30d=-2.9,
+        change_period="30 days",
+        buyer_region_change_pct=-10.9,
+        supplier_region_change_pct=-2.9,
+        buyer_region_adjustment_pct=-9.1,
+        supplier_region_adjustment_pct=0,
+        summary="Europe trades below the benchmark while North America remains near it.",
+        evidence="- Regional aluminium index",
+    ))
+    pair = demo_pair.from_environment()
+    pair.start()
+    assert pair.state.mandate.target_price_eur < pair.supplier_floor < pair.state.mandate.floor_price_eur
+    run_until_paused(pair)
+    assert pair.outcome == "agreement"
+    assert pair.state.currency == "USD"
+    assert len(pair.state.turns) == 6
+    assert "Europe: price movement -10.9%" in pair.state.market_context
+    assert all("Exa benchmark USD 3,325/t" in item[2].decode(errors="ignore") for item in email_network[0])
+
+
+def test_selected_accounts_swap_real_transport_roles(email_network):
+    pair = demo_pair.from_environment(
+        buyer_account="secondary", supplier_account="primary",
+        commodity="copper", buyer_region="East Asia", supplier_region="Europe",
+    )
+    assert pair.buyer.address == "supplier@example.com"
+    assert pair.supplier.address == "buyer@example.com"
+    assert pair.state.our_email == "supplier@example.com"
+    assert pair.state.counterparty_email == "buyer@example.com"
+    assert pair.state.commodity == "Copper cathode"
+    assert pair.state.buyer_region == "East Asia"
+    pair.start()
+    assert email_network[0][0][0:2] == ("supplier@example.com", "buyer@example.com")
+
+
+def test_same_account_role_selection_is_rejected(email_network):
+    with pytest.raises(ValueError, match="different inboxes"):
+        demo_pair.from_environment(buyer_account="primary", supplier_account="primary")
+    assert not email_network[0]

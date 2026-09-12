@@ -66,6 +66,26 @@ def test_mock_start_keeps_demo_defaults(service):
     assert "[port25-" not in negotiation.subject
 
 
+def test_create_passes_selected_parties_and_market(service, monkeypatch):
+    monkeypatch.setenv("PORT25_DEMO_PAIR", "true")
+    service.name = "smtp"
+    pair = MagicMock()
+    pair.state = new_negotiation()
+    pair.state.status = Status.CLOSED
+    pair.healthcheck.return_value = {"ok": True, "accounts": {}}
+    pair.start.return_value = pair.state
+    factory = MagicMock(return_value=pair)
+    monkeypatch.setattr(main.demo_pair, "from_environment", factory)
+    main.create(main.StartPayload(
+        buyer_account="secondary", supplier_account="primary", commodity="steel",
+        buyer_region="East Asia", supplier_region="Europe",
+    ))
+    factory.assert_called_once_with(
+        buyer_account="secondary", supplier_account="primary", commodity="steel",
+        buyer_region="East Asia", supplier_region="Europe",
+    )
+
+
 @pytest.mark.parametrize("resume", [True, False])
 def test_poller_preserves_batch_while_awaiting_approval(service, monkeypatch, resume):
     negotiation = new_negotiation()
