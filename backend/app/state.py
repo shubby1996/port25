@@ -136,7 +136,7 @@ def new_negotiation(**overrides) -> Negotiation:
     """Demo defaults. Person A calls this when a thread starts."""
     defaults = dict(
         mandate=Mandate(
-            floor_price_eur=12.50,
+            floor_price_eur=16.00,
             target_price_eur=10.00,
             max_lead_time_days=30,
         ),

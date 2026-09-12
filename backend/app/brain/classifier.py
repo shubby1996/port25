@@ -18,9 +18,10 @@ from __future__ import annotations
 import json
 
 from ..state import Negotiation, Position, Tier
+from .context import fetch_market_context
 from .llm import complete
 
-CLASSIFIER_MODEL = "gpt-4o-mini"
+CLASSIFIER_MODEL = "openai/gpt-4o-mini"
 
 SYSTEM = """You triage inbound negotiation emails for a buyer's autonomous agent.
 
@@ -31,8 +32,11 @@ tier is one of:
   complex  — they introduced a new argument, condition, or trade-off that needs
              a considered reply.
   escalate — they asked for something structurally new: a contract change, an
-             exclusivity or penalty clause, a legal term, or a price the buyer
-             cannot accept.
+             exclusivity or penalty clause, a change to payment terms or
+             liability/legal terms, or a price the buyer cannot accept. This
+             applies even if they also moved price or lead time in the same
+             email — a legal or structural change escalates regardless of
+             what else is in the message.
 
 reason: one short plain sentence a busy person can read at a glance.
 extracted: any price in EUR per unit and any lead time in days they named,
@@ -47,7 +51,9 @@ def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Po
         f"Our current offer: {negotiation.our_position.model_dump()}\n\n"
         f"Their email:\n{inbound_body}"
     )
-    raw = complete(prompt, model=CLASSIFIER_MODEL, system=SYSTEM, json_mode=True)
+    raw = complete(
+        prompt, model=CLASSIFIER_MODEL, system=SYSTEM, json_mode=True, via_openrouter=True
+    )
 
     try:
         data = json.loads(raw)
@@ -73,5 +79,18 @@ def classify(negotiation: Negotiation, inbound_body: str) -> tuple[Tier, str, Po
     if not negotiation.is_within_mandate(position):
         tier = Tier.ESCALATE
         reason = f"{reason} — and it breaches the mandate floor"
+
+    # Good version of Exa grounding: refresh market evidence exactly when the
+    # stakes rise, not on every turn. A failed/empty fetch never clobbers
+    # context we already have (fetch_market_context swallows its own errors
+    # and returns "").
+    if tier is Tier.COMPLEX:
+        fresh_context = fetch_market_context(
+            f"{negotiation.subject} — market pricing benchmark for a unit price "
+            f"near {position.unit_price_eur} EUR" if position.unit_price_eur
+            else f"{negotiation.subject} — market pricing benchmark"
+        )
+        if fresh_context:
+            negotiation.market_context = fresh_context
 
     return tier, reason, position
